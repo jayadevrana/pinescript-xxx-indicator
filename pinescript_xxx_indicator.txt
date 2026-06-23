@@ -1,0 +1,145 @@
+//@version=5 
+indicator('Xxx', overlay=true) 
+
+
+//length = input(title='Length', defval=5)
+length = 9
+//factor = input.float(title='Factor', minval=0, maxval=1, defval=0.7)
+factor = 0.7
+highlightMovements = input(title='Highlight Movements ?', defval=true)
+//src = input(title='Source', defval=close)
+src = close
+
+gd(src, length) =>
+    ta.ema(src, length) * (1 + factor) - ta.ema(ta.ema(src, length), length) * factor
+
+t3 = gd(gd(gd(src, length), length), length)
+
+t3Color = highlightMovements ? t3 > t3[1] ? color.green : color.red : #6d1e7f
+
+//
+
+BuyCondition = close > t3 and close[1] < t3[1]
+SellCondition = close < t3 and close[1] > t3[1]
+
+
+last_signal = 0
+Buy_final = BuyCondition and (nz(last_signal[1]) == 0 or nz(last_signal[1]) == -1)
+Sell_final = SellCondition and (nz(last_signal[1]) == 0 or nz(last_signal[1]) == 1)
+last_signal := Buy_final ? 1 : Sell_final ? -1 : last_signal[1]
+
+//plotshape(Buy_final, style=shape.cross, location=location.belowbar, color=color.new(#0814BF, 0), size=size.small)
+//plotshape(Sell_final, style=shape.cross, location=location.abovebar, color=color.new(#BF0000, 0), size=size.small)
+
+
+BuyHigh = ta.valuewhen(Buy_final, high, 0)
+ShortLow = ta.valuewhen(Sell_final, low, 0)
+
+eBuy = last_signal > 0 and close > BuyHigh
+eShort = last_signal < 0 and close < ShortLow
+
+LastSignal = 0
+Buy = eBuy and (nz(LastSignal[1]) == 0 or nz(LastSignal[1]) == -1)
+Short = eShort and (nz(LastSignal[1]) == 0 or nz(LastSignal[1]) == 1)
+LastSignal := Buy ? 1 : Short ? -1 : LastSignal[1]
+
+
+buyprice = ta.valuewhen(Buy, high, 0)
+sellprice = ta.valuewhen(Short, low, 0)
+
+bfirm = ta.crossover(close, buyprice)
+sfirm = ta.crossunder(close, sellprice)
+
+Exrem_Buy_Sell(BUY, SELL) =>
+
+    buycond = BUY and BUY[1] == 0
+    sellcond = SELL and SELL[1] == 0
+
+    bullish = ta.barssince(buycond) < ta.barssince(sellcond)
+    bearish = ta.barssince(sellcond) < ta.barssince(buycond)
+
+    buym = bearish[1] and buycond
+    sellm = bullish[1] and sellcond
+
+    [buym, sellm]
+
+[cbuy, ccb] = Exrem_Buy_Sell(bfirm, Buy)
+[csell, ccs] = Exrem_Buy_Sell(sfirm, Short)
+//plotshape(Buy, style=shape.labelup, location=location.belowbar, color=color.new(#0814BF, 0), title='Buy label', text='Xx', textcolor=color.new(color.white, 0))
+//plotshape(Short,style=shape.labeldown, location=location.abovebar, color=color.new(#BF0000, 0), title='Sell label', text='Xx', textcolor=color.new(color.white, 0)) 
+
+//plotshape(cbuy, style=shape.labelup, location=location.belowbar, color=color.new(#0814BF, 0), title='Buy label', text='BUY', textcolor=color.new(color.white, 0))
+//plotshape(csell, style=shape.labeldown, location=location.abovebar, color=color.new(#BF0000, 0), title='Sell label', text='SELL', textcolor=color.new(color.white, 0))
+
+ 
+show_signals = input.bool(false) 
+ 
+//have to use security function to calculate logarithm properly 
+O = request.security(syminfo.tickerid, timeframe.period,(open)) 
+H = request.security(syminfo.tickerid, timeframe.period,(high)) 
+L = request.security(syminfo.tickerid, timeframe.period,(low)) 
+C = request.security(syminfo.tickerid, timeframe.period,(close)) 
+//plotcandle(O, H, L, C, color=open < close ? color.green : color.red, wickcolor=color.black) 
+ 
+ 
+// Getting inputs 
+//z_length = input(title='z Length', defval=50)
+z_length = 200 
+//src = input(title='Source', defval=close) 
+sma_source = input(title='KK', defval=false) 
+ 
+ 
+ 
+// Calculating 
+sma_1 = ta.sma(src, z_length) 
+ema_1 = ta.ema(src, z_length) 
+z_ma = sma_source ? sma_1 : ema_1 
+ 
+x = (z_ma) 
+ 
+// plot(x, title='x', color=C >= x ? color.blue : color.red, linewidth=3) 
+ 
+lookBack = 100
+//multi = input.float(2, title='Multiplier', minval=0.001, maxval=2)
+multi = 2 
+ 
+mean = ta.ema(x, lookBack) 
+stddev = multi * ta.stdev(x, lookBack) 
+b = mean + stddev 
+s = mean - stddev 
+ 
+low1 = ta.crossover(x, s) 
+high1 = ta.crossunder(x, b) 
+ 
+meanp = plot(mean, color=color.new(color.gray, 0)) 
+bsign = plot(b, color=color.new(color.green, 0), linewidth=2) 
+ssign = plot(s, color=color.new(color.red, 0), linewidth=2) 
+ 
+fill(bsign, meanp, color=color.new(color.green, 90)) 
+fill(meanp, ssign, color=color.new(color.red, 90)) 
+ 
+ 
+ 
+e=  (timeframe.period=="D"?" Daily TF":(timeframe.period=="S"?" Seconds":(timeframe.period=="W"?" Week":" Minutes"))) 
+if ta.crossover(C, b) and barstate.isconfirmed 
+    alert("===> Buy Alert! for "  + syminfo.ticker + " on " +  timeframe.period + "" + str.tostring(e) + " at price (" + str.tostring(close) + ")   ", alert.freq_once_per_bar) 
+ 
+if ta.crossunder(C, s) and barstate.isconfirmed 
+    alert("Sell Alert! for "  + syminfo.ticker + " on " +  timeframe.period + "" + str.tostring(e) + " at price (" + str.tostring(close) + ")   ", alert.freq_once_per_bar) 
+ 
+ 
+bgcolor(show_signals and ta.crossover(C, b) and barstate.isconfirmed?color.new(color.lime, 70):na) 
+bgcolor(show_signals and ta.crossunder(C, s) and barstate.isconfirmed?color.new(color.red,70):na)
+
+plotshape(Buy and C > b, style=shape.xcross, location=location.belowbar, color=color.new(#0814BF, 0),size=size.small)
+plotshape(Short and C < s, style=shape.xcross, location=location.abovebar, color=color.new(#BF0000, 0),size=size.small)
+
+
+if Buy and C > b
+    alert('Get Ready to Fight Alert \n\n'+syminfo.ticker+'\n \nBUY SIGNAL\n \nAt price  '+ str.tostring(close)+'\n\nTime frame :=  '+timeframe.period+'',alert.freq_once_per_bar_close)
+
+if Short and C < s
+    alert('Get Ready to Fight Alert \n\n'+syminfo.ticker+'\n \nSELL SIGNAL\n \nAt price  '+ str.tostring(close)+'\n\nTime frame :=  '+timeframe.period+'',alert.freq_once_per_bar_close)
+
+
+//
